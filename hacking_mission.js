@@ -1,8 +1,13 @@
 export async function main(ns) {
-    while (true) {
-        let board = readBoard();
-        console.debug(board);
-        await ns.sleep(10000);
+    try {
+        while (true) {
+            let board = readBoard();
+            console.debug(board);
+            await ns.sleep(10000);
+        }
+    }
+    catch (e) {
+        console.warn(e);
     }
 }
 var NodeType;
@@ -46,7 +51,7 @@ function nodeOwnerFromClass(nodeClass) {
     return NodeOwner.Neutral;
 }
 const nodeIdRe = /^.*-(\d+)-(\d+)$/;
-const nodeTextRe = /((?:CPU Core)|\w+)\s+HP: ((?:\.|\d)+)\sAtk: ((?:\.|\d)+)\s+Def: ((?:\.|\d)+)/m;
+const nodeTextRe = /((?:CPU Core)|\w+)\s+HP: ((?:[.,]|\d)+)\sAtk: ((?:[.,]|\d)+)\s+Def: ((?:\[.,]|\d)+)/m;
 class GridElement {
     constructor(node) {
         this.node = node;
