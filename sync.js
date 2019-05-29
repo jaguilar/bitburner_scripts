@@ -16,7 +16,7 @@ export async function sync(ns) {
 }
 
 export async function sync1(ns, filename) {
-  const url = `https://raw.githubusercontent.com/jaguilar/bitburner_scripts/master/${filename}`;
+  const url = `http://localhost:44524/${filename}`;
   const content = new TextDecoder("utf-8").decode(await (await fetch(url, {
     cache: "no-cache",
   })).arrayBuffer());
