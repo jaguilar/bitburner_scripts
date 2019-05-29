@@ -48,8 +48,8 @@ const NODE_OWNER_NEUTRAL = 1;
 const NODE_OWNER_ME = 2;
 const NODE_OWNER_ENEMY = 3;
 function nodeOwnerFromClass(nodeClass) {
-  if (nodeClass.contains("player")) return NODE_OWNER_ME;
-  if (nodeClass.contains("enemy")) return NODE_OWNER_ENEMY;
+  if (nodeClass.indexOf("player") != -1) return NODE_OWNER_ME;
+  if (nodeClass.indexOf("enemy") != -1) return NODE_OWNER_ENEMY;
   return NODE_OWNER_NEUTRAL;
 }
 
