@@ -10,6 +10,6 @@ export async function main(ns) {
     // If it's not running, sync all of our JS and restart the program.
     await sync1(ns, ns.args[0]);
     await ns.run(ns.args[0], 1, ...ns.args.slice(1));
-    await 15000;
+    await ns.sleep(15000);
   }
 }
