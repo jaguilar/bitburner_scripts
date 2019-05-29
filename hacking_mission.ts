@@ -1,10 +1,4 @@
-import { Scheduler } from "scheduler.js";
-
 export async function main(ns: IGame) {
-  let s = new Scheduler();
-  s.load();
-  s.load();
-
   while (true) {
     let board = readBoard();
     console.debug(board);
