@@ -2,6 +2,10 @@
  * @param {IGame} ns
  */
 export async function main(ns) {
+  await sync(ns);
+}
+
+export async function sync(ns) {
   for (const f of ns.ls("home", "js")) {
     const tmpfile = `tmp-${Math.floor(Math.random() * 100000)}.js`;
     await ns.wget(`https://raw.githubusercontent.com/jaguilar/bitburner_scripts/master/${f}`, tmpfile);
