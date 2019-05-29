@@ -1,4 +1,4 @@
-import {sync} from "sync.js";
+import {sync1} from "sync.js";
 
 export async function main(ns) {
   while (true) {
@@ -8,7 +8,7 @@ export async function main(ns) {
     }
 
     // If it's not running, sync all of our JS and restart the program.
-    await sync(ns);
+    await sync1(ns, ns.args[0]);
     await ns.run(ns.args[0], 1, ...ns.args.slice(1));
     await 15000;
   }
