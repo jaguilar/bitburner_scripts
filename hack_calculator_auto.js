@@ -132,7 +132,6 @@ function makeFit(ns, threadDict, ramAvailable, target) {
     }
     // We don't need any ram slack as it is already factored in to the ram available.
     if (ramUsage(ns, threadDict) > ramAvailable) {
-      console.lg("cutting weaken");
       --threadDict.weaken;
       continue;
     }
@@ -143,7 +142,6 @@ function makeFit(ns, threadDict, ramAvailable, target) {
 }
 
 function decideIdealThreads(ns, target) {
-  console.debug(target);
   const securityPerWeaken = 0.05;
 
   if (target.currentSecurity > target.minSecurity + 10) {
@@ -226,7 +224,6 @@ function totalThreadCount(threadDict) { return threadDict.grow + threadDict.weak
 async function scheduleAllTargets(ns, scheduler) {
     const dbFile = "db_hack_calculator.txt";
     let computed = await computeThreadsForAllTargets(ns, scheduler);
-    console.debug(computed);
     let last = JSON.parse(ns.read(dbFile) || "[]");
 
     // We compute the target number of hosts and threads every thirty seconds for every
