@@ -2,7 +2,11 @@
  * @param {IGame} ns
  */
 export async function main(ns) {
-  await sync(ns);
+  if (ns.args.length > 0) {
+    await sync1(ns, ns.args[0]);
+  } else {
+    await sync(ns);
+  }
 }
 
 export async function sync(ns) {
