@@ -65,6 +65,7 @@ class GridElement {
     this.node = divNode;
     const idMatch = nodeIdRe.exec(this.node.id);
     [this.y, this.x] = parseInt(idMatch[1]), parseInt(idMatch[2]);
+    //
 
     this.owner = nodeOwnerFromClass(this.node.className);
 
