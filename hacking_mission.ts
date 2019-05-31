@@ -39,7 +39,6 @@ export async function main(ns: IGame) {
     await mainNoTry(ns);
   } catch (e) {
     // While we're in hacking missions, sometimes our exceptions don't get reported?
-    console.info("hacking_mission.js failed due to: ", e);
     throw e;
   } finally {
     // Restore JSPlumb to its original state, so we can play the game manually if we want.
@@ -58,7 +57,6 @@ async function mainNoTry(ns: IGame) {
     throw new Error("Unable to grab jsplumb instance.");
   }
 
-  console.info("mission started");
 
   let board = readBoard();
   if (!board) throw new Error("unable to read board even though we should be in a mission");
@@ -109,7 +107,7 @@ function startMission(faction: string) {
 async function solveGame(ns: IGame, h: IHackingMissionState) {
   while (isGameRunning()) {
     doGameStep(h);
-    await ns.sleep(500);
+    await ns.sleep(250);
   }
 }
 
@@ -134,7 +132,6 @@ function doGameStep(h: IHackingMissionState) {
   for (const core of h.board.data.filter(n => n.type == NodeType.Core && n.owner == NodeOwner.Me)) {
     if (core.def > 10) {
       if (core.action == NodeAction.Overflowing) continue;
-      console.info("Starting core overflow", core.clone());
       core.node.click();
       h.buttons.overflow.click();
       continue;
@@ -165,7 +162,6 @@ function doGameStep(h: IHackingMissionState) {
       h.jsp.connect({source: core.node, target: targetRoute[1].node});
 
       core.connectionTarget = targetRoute[1];
-      console.info("picked connection target: ", core.connectionTarget.clone());
     }
 
     const target = core.connectionTarget;
@@ -173,11 +169,9 @@ function doGameStep(h: IHackingMissionState) {
     // We scan longer before attacking the node if it's owned by the enemy.
     const shouldAttack = target.def < ((target.owner == NodeOwner.Enemy) ? 0.5 : 0.1) * overallStats.me.atk;
     if (shouldAttack && core.action != NodeAction.Attacking) {
-      console.info("Starting attack");
       core.node.click();
       h.buttons.attack.click();
     } else if (!shouldAttack && core.action != NodeAction.Scanning) {
-      console.info("Starting scan");
       core.node.click();
       h.buttons.scan.click();
     }
@@ -194,7 +188,8 @@ function handleTransferAndShield(h: IHackingMissionState) {
     }
 
     if (node.type == NodeType.Transfer) {
-      if (node.def > 20 && node.action != NodeAction.Overflowing) {
+      if (node.action == NodeAction.Inactive ||
+          (node.def > 20 && node.action != NodeAction.Overflowing)) {
         node.node.click();
         h.buttons.overflow.click();
       } else if (node.def < 10 && node.action != NodeAction.Fortifying) {
@@ -417,7 +412,6 @@ class Board {
       if (predicate(lastGridElement)) {
         // We've found the route to the closest item that matches the predicate. Return it.
         if (entry.route.length < 2 || entry.route[0].owner != NodeOwner.Me || entry.route[1].owner == NodeOwner.Me) {
-          console.info(entry.route);
           throw new Error("unexpected route: expected at least two elements. the first should be owned by us and the second shouldn't");
         }
         return entry.route;
