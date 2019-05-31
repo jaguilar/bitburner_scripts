@@ -36,13 +36,14 @@ async function mainNoTry(ns, faction) {
     // to the instance. This instance is used to make connections between nodes.
     let container = { capturedInstance: null };
     monkeyPatchJsPlumb(container);
-    startMission(faction);
-    if (!container.capturedInstance) {
-        throw new Error("Unable to grab jsplumb instance.");
-    }
-    let board = readBoard();
-    if (!board)
-        throw new Error("unable to read board even though we should be in a mission");
+    let board;
+    do {
+        startMission(faction);
+        if (!container.capturedInstance) {
+            throw new Error("Unable to grab jsplumb instance.");
+        }
+        board = readBoard();
+    } while (!goodBoard(board));
     let buttons = getButtons();
     const hackingMissionState = {
         board: board,
@@ -58,6 +59,18 @@ async function mainNoTry(ns, faction) {
         await debugGame(ns, hackingMissionState);
         return false;
     }
+}
+function goodBoard(board) {
+    let adjacentTransfers = 0;
+    for (let node of board.data) {
+        if (node.type != NodeType.Transfer)
+            continue;
+        if (!Array.of(...board.neighbors(node)).some(n => n.owner == NodeOwner.Me))
+            continue;
+        ++adjacentTransfers;
+    }
+    let numOwnCpus = board.data.reduce((a, n) => a + ((n.type == NodeType.Core && n.owner == NodeOwner.Me) ? 1 : 0), 0);
+    return adjacentTransfers >= Math.ceil(numOwnCpus / 2);
 }
 function isGameRunning() {
     return document.querySelector("#hacking-mission-player-stats") != null;
@@ -105,11 +118,10 @@ function doGameStep(h) {
     // we'll get more transfer nodes. Otherwise, we'll hack toward the enemy. Note that we don't
     // change targets once we have them.
     for (const core of h.board.data.filter(n => n.type == NodeType.Core && n.owner == NodeOwner.Me)) {
-        if (core.def > 10) {
-            if (core.action == NodeAction.Overflowing)
-                continue;
-            core.node.click();
-            h.buttons.overflow.click();
+        if ((core.connectionTarget && core.connectionTarget.def > 1.2 * overallStats.me.atk) ||
+            core.def > 10) {
+            // Treat the core like a transfer node until we have enough to hack something nearby.
+            handleTransferNode(h, core);
             continue;
         }
         if (!core.connectionTarget) {
@@ -118,7 +130,7 @@ function doGameStep(h) {
             // enemy database.
             let targetRoute = null;
             if (overallStats.me.atk < 2 * overallStats.enemy.def) {
-                targetRoute = h.board.findClosestRoute(overallStats.enemy.def, ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer && ge.myTarget + ge.enemyTarget == 0);
+                targetRoute = h.board.findClosestRoute(overallStats.enemy.def, ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer /* && ge.myTarget + ge.enemyTarget == 0*/);
             }
             if (!targetRoute) {
                 // Either there are no more neutral transfer nodes, or else we are ready to start attacking.
@@ -130,6 +142,7 @@ function doGameStep(h) {
             }
             h.jsp.connect({ source: core.node, target: targetRoute[1].node });
             core.connectionTarget = targetRoute[1];
+            targetRoute[1].myTarget++;
         }
         const target = core.connectionTarget;
         // We scan longer before attacking the node if it's owned by the enemy.
@@ -153,16 +166,19 @@ function handleTransferAndShield(h) {
             h.buttons.fortify.click();
         }
         if (node.type == NodeType.Transfer) {
-            if (node.action == NodeAction.Inactive ||
-                (node.def > 20 && node.action != NodeAction.Overflowing)) {
-                node.node.click();
-                h.buttons.overflow.click();
-            }
-            else if (node.def < 10 && node.action != NodeAction.Fortifying) {
-                node.node.click();
-                h.buttons.fortify.click();
-            }
+            handleTransferNode(h, node);
         }
+    }
+}
+function handleTransferNode(h, node) {
+    if (node.action == NodeAction.Inactive ||
+        (node.def > 20 && node.action != NodeAction.Overflowing)) {
+        node.node.click();
+        h.buttons.overflow.click();
+    }
+    else if (node.def < 10 && node.action != NodeAction.Fortifying) {
+        node.node.click();
+        h.buttons.fortify.click();
     }
 }
 const statsRe = /(?:Player|Enemy) Attack: ((?:[.,]|\d)+)\s*(?:Player|Enemy) Defense: ((?:[.,]|\d)+)/m;

@@ -61,11 +61,11 @@ async function mainNoTry(ns: IGame, faction: string) {
   monkeyPatchJsPlumb(container);
   let board: Board;
   do {
-  startMission(faction);
+    startMission(faction);
 
-  if (!container.capturedInstance) {
-    throw new Error("Unable to grab jsplumb instance.");
-  }
+    if (!container.capturedInstance) {
+      throw new Error("Unable to grab jsplumb instance.");
+    }
 
     board = readBoard()!;
   } while (!goodBoard(board));
@@ -154,10 +154,10 @@ function doGameStep(h: IHackingMissionState) {
   // we'll get more transfer nodes. Otherwise, we'll hack toward the enemy. Note that we don't
   // change targets once we have them.
   for (const core of h.board.data.filter(n => n.type == NodeType.Core && n.owner == NodeOwner.Me)) {
-    if (core.def > 10) {
-      if (core.action == NodeAction.Overflowing) continue;
-      core.node.click();
-      h.buttons.overflow.click();
+    if ((core.connectionTarget && core.connectionTarget.def > 1.2 * overallStats.me.atk) ||
+        core.def > 10) {
+      // Treat the core like a transfer node until we have enough to hack something nearby.
+      handleTransferNode(h, core);
       continue;
     }
 
@@ -169,7 +169,7 @@ function doGameStep(h: IHackingMissionState) {
       if (overallStats.me.atk < 2 * overallStats.enemy.def) {
         targetRoute = h.board.findClosestRoute(
           overallStats.enemy.def,
-          ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer && ge.myTarget + ge.enemyTarget == 0);
+          ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer/* && ge.myTarget + ge.enemyTarget == 0*/);
       }
       if (!targetRoute) {
         // Either there are no more neutral transfer nodes, or else we are ready to start attacking.
@@ -186,6 +186,7 @@ function doGameStep(h: IHackingMissionState) {
       h.jsp.connect({source: core.node, target: targetRoute[1].node});
 
       core.connectionTarget = targetRoute[1];
+      targetRoute[1].myTarget++;
     }
 
     const target = core.connectionTarget;
@@ -212,15 +213,19 @@ function handleTransferAndShield(h: IHackingMissionState) {
     }
 
     if (node.type == NodeType.Transfer) {
-      if (node.action == NodeAction.Inactive ||
-          (node.def > 20 && node.action != NodeAction.Overflowing)) {
-        node.node.click();
-        h.buttons.overflow.click();
-      } else if (node.def < 10 && node.action != NodeAction.Fortifying) {
-        node.node.click();
-        h.buttons.fortify.click();
-      }
+      handleTransferNode(h, node);
     }
+  }
+}
+
+function handleTransferNode(h: IHackingMissionState, node: GridElement) {
+  if (node.action == NodeAction.Inactive ||
+      (node.def > 20 && node.action != NodeAction.Overflowing)) {
+    node.node.click();
+    h.buttons.overflow.click();
+  } else if (node.def < 10 && node.action != NodeAction.Fortifying) {
+    node.node.click();
+    h.buttons.fortify.click();
   }
 }
 
