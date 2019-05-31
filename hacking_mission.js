@@ -32,11 +32,7 @@ async function mainNoTry(ns) {
     if (!container.capturedInstance) {
         throw new Error("Unable to grab jsplumb instance.");
     }
-    console.info("mission started -- and module updated");
-    // Try doing some stuff to the board and see if it works. We'll start the game, overflow
-    // the cpu, and then after ten seconds link the cpu to the node to the right and scan it. That should
-    // be sufficient evidence things are working.
-    await ns.sleep(5000);
+    console.info("mission started");
     let board = readBoard();
     if (!board)
         throw new Error("unable to read board even though we should be in a mission");
@@ -46,7 +42,7 @@ async function mainNoTry(ns) {
         buttons: buttons,
         jsp: container.capturedInstance,
     };
-    if (false) {
+    if (true) {
         await solveGame(ns, hackingMissionState);
     }
     else {
@@ -98,8 +94,11 @@ function doGameStep(h) {
     // Decide what we're gonna do with our CPUs. If our attack is less than twice the enemy defense,
     // we'll get more transfer nodes. Otherwise, we'll hack toward the enemy. Note that we don't
     // change targets once we have them.
-    for (const core of h.board.data.filter(n => n.type == NodeType.Core)) {
-        if (core.def > 1 && core.action != NodeAction.Overflowing) {
+    for (const core of h.board.data.filter(n => n.type == NodeType.Core && n.owner == NodeOwner.Me)) {
+        if (core.def > 10) {
+            if (core.action == NodeAction.Overflowing)
+                continue;
+            console.info("Starting core overflow", core.clone());
             core.node.click();
             h.buttons.overflow.click();
             continue;
@@ -122,15 +121,18 @@ function doGameStep(h) {
             }
             h.jsp.connect({ source: core.node, target: targetRoute[1].node });
             core.connectionTarget = targetRoute[1];
+            console.info("picked connection target: ", core.connectionTarget.clone());
         }
         const target = core.connectionTarget;
         // We scan longer before attacking the node if it's owned by the enemy.
         const shouldAttack = target.def < ((target.owner == NodeOwner.Enemy) ? 0.5 : 0.1) * overallStats.me.atk;
         if (shouldAttack && core.action != NodeAction.Attacking) {
+            console.info("Starting attack");
             core.node.click();
             h.buttons.attack.click();
         }
         else if (!shouldAttack && core.action != NodeAction.Scanning) {
+            console.info("Starting scan");
             core.node.click();
             h.buttons.scan.click();
         }
@@ -145,18 +147,18 @@ function handleTransferAndShield(h) {
             h.buttons.fortify.click();
         }
         if (node.type == NodeType.Transfer) {
-            if (node.def > 10 && node.action != NodeAction.Overflowing) {
+            if (node.def > 20 && node.action != NodeAction.Overflowing) {
                 node.node.click();
                 h.buttons.overflow.click();
             }
-            else if (node.def < 5 && node.action != NodeAction.Fortifying) {
+            else if (node.def < 10 && node.action != NodeAction.Fortifying) {
                 node.node.click();
                 h.buttons.fortify.click();
             }
         }
     }
 }
-const statsRe = /(?:Player|Enemy) Attack: ((?:[.,]|\d)+).*(?:Player|Enemy) Defense: ((?:[.,]|\d)+)/m;
+const statsRe = /(?:Player|Enemy) Attack: ((?:[.,]|\d)+)\s*(?:Player|Enemy) Defense: ((?:[.,]|\d)+)/m;
 function parseStats(statsNode) {
     let match = statsRe.exec(statsNode.innerText);
     if (!match)
@@ -257,7 +259,7 @@ function parseCommaNumber(s) {
     return parseFloat(s.replace(",", ""));
 }
 const nodeIdRe = /^.*-(\d+)-(\d+)$/;
-const nodeTextRe = /^((?:CPU Core)|\w+)\s+HP: ((?:[.,]|\d)+)\sAtk: ((?:[.,]|\d)+)\s+Def: ((?:[.,]|\d)+)\s*(\w*)$/m;
+const nodeTextRe = /^((?:CPU Core)|\w+)\s*HP: ((?:[.,]|\d)+)\s*Atk: ((?:[.,]|\d)+)\s*Def: ((?:[.,]|\d)+)\s*(\w*)$/m;
 class GridElement {
     constructor(node) {
         this.node = node;
@@ -344,7 +346,12 @@ class Board {
             // any known path.
             for (const neighbor of this.neighbors(lastGridElement)) {
                 const minCost = minDef.get(neighbor) || Infinity;
-                const neighborCost = neighbor.owner == NodeOwner.Enemy ? enemyDef : neighbor.def;
+                let neighborCost = neighbor.owner == NodeOwner.Enemy ? enemyDef : neighbor.def;
+                if (neighbor.type == NodeType.Transfer) {
+                    // We prefer to go through transfer nodes, since that can allow us to build up some additional
+                    // attack as we go.
+                    neighborCost *= .5;
+                }
                 const newRouteCost = entry.routeDef + neighborCost;
                 if (minCost <= newRouteCost) {
                     // Not a better route to this neighbor.
