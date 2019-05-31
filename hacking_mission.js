@@ -11,7 +11,16 @@ function monkeyPatchJsPlumb(container) {
 }
 export async function main(ns) {
     try {
-        await mainNoTry(ns);
+        let consecutiveLosses = 0;
+        while (consecutiveLosses < 3) {
+            const victory = await mainNoTry(ns, ns.args[0]);
+            if (victory) {
+                consecutiveLosses = 0;
+            }
+            else {
+                ++consecutiveLosses;
+            }
+        }
     }
     catch (e) {
         // While we're in hacking missions, sometimes our exceptions don't get reported?
@@ -22,12 +31,12 @@ export async function main(ns) {
         jsPlumb.getInstance = globalThis.originalGetInstance;
     }
 }
-async function mainNoTry(ns) {
+async function mainNoTry(ns, faction) {
     // Before starting the mission, we need to monkey-patch jsplumb so that we can get a handle
     // to the instance. This instance is used to make connections between nodes.
     let container = { capturedInstance: null };
     monkeyPatchJsPlumb(container);
-    startMission("Sector-12");
+    startMission(faction);
     if (!container.capturedInstance) {
         throw new Error("Unable to grab jsplumb instance.");
     }
@@ -42,9 +51,12 @@ async function mainNoTry(ns) {
     };
     if (true) {
         await solveGame(ns, hackingMissionState);
+        const dbox = document.querySelector("div.dialog-box-content");
+        return dbox && dbox.innerText.includes("Mission won!");
     }
     else {
         await debugGame(ns, hackingMissionState);
+        return false;
     }
 }
 function isGameRunning() {

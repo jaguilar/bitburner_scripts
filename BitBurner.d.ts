@@ -53,6 +53,7 @@ declare interface IHacknetNode {
 }
 
 declare interface IGame {
+  args: Array<string>
   hacknetnodes: IHacknetNode[];
 
   hack(hostname: string): Promise<number>;
