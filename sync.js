@@ -7,6 +7,7 @@ export async function main(ns) {
   } else {
     await sync(ns);
   }
+  ns.tprint("sync complete");
 }
 
 export async function sync(ns) {
@@ -23,6 +24,7 @@ export async function sync1(ns, filename) {
   if (content.length === 0) return;
   if (content != ns.read(filename)) {
     console.debug("changed content, overwriting " + filename);
+    await ns.rm(filename);  // Clear the script so that the module also gets cleared.
     ns.write(filename, content, "w");
   }
 }
