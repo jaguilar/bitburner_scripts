@@ -59,14 +59,16 @@ async function mainNoTry(ns: IGame, faction: string) {
   // to the instance. This instance is used to make connections between nodes.
   let container: IJSPlumbContainer = {capturedInstance: null};
   monkeyPatchJsPlumb(container);
+  let board: Board;
+  do {
   startMission(faction);
 
   if (!container.capturedInstance) {
     throw new Error("Unable to grab jsplumb instance.");
   }
 
-  let board = readBoard();
-  if (!board) throw new Error("unable to read board even though we should be in a mission");
+    board = readBoard()!;
+  } while (!goodBoard(board));
 
   let buttons = getButtons();
   const hackingMissionState: IHackingMissionState = {
@@ -84,6 +86,17 @@ async function mainNoTry(ns: IGame, faction: string) {
     await debugGame(ns, hackingMissionState);
     return false;
   }
+}
+
+function goodBoard(board: Board) {
+  let adjacentTransfers = 0;
+  for (let node of board.data) {
+    if (node.type != NodeType.Transfer) continue;
+    if (!Array.of(...board.neighbors(node)).some(n => n.owner == NodeOwner.Me)) continue;
+    ++adjacentTransfers;
+  }
+  let numOwnCpus = board.data.reduce((a, n) => a + ((n.type == NodeType.Core && n.owner == NodeOwner.Me) ? 1 : 0), 0);
+  return adjacentTransfers >= Math.ceil(numOwnCpus / 2);
 }
 
 function isGameRunning(): boolean {
