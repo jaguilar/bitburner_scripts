@@ -4,7 +4,8 @@
   "description": "",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "sync_server": "nodemon --exec \"http-server -p 44524 -c 0 --cors ./\""
+    "sync_server": "http-server -p 44524 -c 0 --cors ./",
+    "tscw": "tsc --watch"
   },
   "repository": {
     "type": "git",
@@ -20,5 +21,9 @@
     "http-server": "^0.11.1",
     "nodemon": "^1.19.1",
     "typescript": "^3.5.1"
+  },
+  "devDependencies": {
+    "@types/jsplumb": "^2.5.7",
+    "jsplumb": "^2.9.3"
   }
 }
