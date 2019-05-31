@@ -76,7 +76,7 @@ async function mainNoTry(ns: IGame) {
 }
 
 function isGameRunning(): boolean {
-  return document.querySelector("#mission-container") != null;
+  return document.querySelector("#hacking-mission-player-stats") != null;
 }
 
 function startMission(faction: string) {

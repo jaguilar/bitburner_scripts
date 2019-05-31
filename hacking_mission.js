@@ -48,7 +48,7 @@ async function mainNoTry(ns) {
     }
 }
 function isGameRunning() {
-    return document.querySelector("#mission-container") != null;
+    return document.querySelector("#hacking-mission-player-stats") != null;
 }
 function startMission(faction) {
     // Try to cancel any currently running mission.
