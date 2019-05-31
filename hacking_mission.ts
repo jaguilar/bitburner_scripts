@@ -156,7 +156,7 @@ function doGameStep(h: IHackingMissionState) {
       if (overallStats.me.atk < 2 * overallStats.enemy.def) {
         targetRoute = h.board.findClosestRoute(
           overallStats.enemy.def,
-          ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer);
+          ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer && ge.myTarget + ge.enemyTarget == 0);
       }
       if (!targetRoute) {
         // Either there are no more neutral transfer nodes, or else we are ready to start attacking.
