@@ -216,9 +216,10 @@ function doGameStep(h: IHackingMissionState) {
     }
 
     const target = core.connectionTarget;
+    const effectiveDef = target.owner == NodeOwner.Enemy ? overallStats.enemy.def : target.def;
 
     // We scan longer before attacking the node if it's owned by the enemy.
-    const shouldAttack = target.def < ((target.owner == NodeOwner.Enemy) ? 0.5 : 0.1) * overallStats.me.atk;
+    const shouldAttack = target.def < 10 || effectiveDef < 0.75 * overallStats.me.atk;
     if (shouldAttack && core.action != NodeAction.Attacking) {
       core.node.click();
       h.buttons.attack.click();
