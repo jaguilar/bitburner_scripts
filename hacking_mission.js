@@ -10,6 +10,7 @@ function monkeyPatchJsPlumb(container) {
     };
 }
 export async function main(ns) {
+    ns.disableLog("ALL");
     try {
         let consecutiveLosses = 0;
         while (consecutiveLosses < 3) {
@@ -38,6 +39,7 @@ async function mainNoTry(ns, faction) {
     monkeyPatchJsPlumb(container);
     let board;
     do {
+        container.capturedInstance = null;
         startMission(faction);
         if (!container.capturedInstance) {
             throw new Error("Unable to grab jsplumb instance.");
@@ -46,6 +48,7 @@ async function mainNoTry(ns, faction) {
     } while (!goodBoard(board));
     let buttons = getButtons();
     const hackingMissionState = {
+        ns: ns,
         board: board,
         buttons: buttons,
         jsp: container.capturedInstance,
@@ -61,16 +64,27 @@ async function mainNoTry(ns, faction) {
     }
 }
 function goodBoard(board) {
-    let adjacentTransfers = 0;
-    for (let node of board.data) {
-        if (node.type != NodeType.Transfer)
-            continue;
-        if (!Array.of(...board.neighbors(node)).some(n => n.owner == NodeOwner.Me))
-            continue;
-        ++adjacentTransfers;
+    const seen = new Set();
+    // Starting from one of our CPU nodes (which are always adjacent and always start
+    // in the top left?) how many transfer nodes can we find without going through any
+    // other type of node.
+    const queue = [board.get(0, 0)];
+    let count = 0;
+    while (queue.length > 0) {
+        const ge = queue.pop();
+        if (ge.type == NodeType.Transfer)
+            ++count;
+        if (ge.type == NodeType.Transfer || ge.owner == NodeOwner.Me) {
+            for (const neighbor of board.neighbors(ge)) {
+                if (seen.has(neighbor))
+                    continue;
+                seen.add(neighbor);
+                queue.push(neighbor);
+            }
+        }
     }
     let numOwnCpus = board.data.reduce((a, n) => a + ((n.type == NodeType.Core && n.owner == NodeOwner.Me) ? 1 : 0), 0);
-    return adjacentTransfers >= Math.ceil(numOwnCpus / 2);
+    return count >= numOwnCpus;
 }
 function isGameRunning() {
     return document.querySelector("#hacking-mission-player-stats") != null;
@@ -110,6 +124,12 @@ async function debugGame(ns, h) {
         await ns.sleep(30000);
     }
 }
+function fortifyEffect(h) {
+    return 0.9 * h.ns.getHackingLevel() / 130;
+}
+function overflowEffect(h) {
+    return 0.95 * h.ns.getHackingLevel() / 130;
+}
 function doGameStep(h) {
     h.board.update(h.jsp);
     const overallStats = getOverallStats();
@@ -119,7 +139,7 @@ function doGameStep(h) {
     // change targets once we have them.
     for (const core of h.board.data.filter(n => n.type == NodeType.Core && n.owner == NodeOwner.Me)) {
         if ((core.connectionTarget && core.connectionTarget.def > 1.2 * overallStats.me.atk) ||
-            core.def > 10) {
+            core.def > 2 * overflowEffect(h)) {
             // Treat the core like a transfer node until we have enough to hack something nearby.
             handleTransferNode(h, core);
             continue;
@@ -171,12 +191,12 @@ function handleTransferAndShield(h) {
     }
 }
 function handleTransferNode(h, node) {
-    if (node.action == NodeAction.Inactive ||
-        (node.def > 20 && node.action != NodeAction.Overflowing)) {
+    if ((node.action != NodeAction.Overflowing && node.action != NodeAction.Fortifying) ||
+        (node.def > 4 * fortifyEffect(h) && node.action != NodeAction.Overflowing)) {
         node.node.click();
         h.buttons.overflow.click();
     }
-    else if (node.def < 10 && node.action != NodeAction.Fortifying) {
+    else if (node.def < 2 * overflowEffect(h) && node.action != NodeAction.Fortifying) {
         node.node.click();
         h.buttons.fortify.click();
     }
