@@ -89,6 +89,8 @@ async function jobIsGone(ns, job, hostname) {
       if (Date.now() - start > 20000) {
           ns.tprint("a while passed since we killed " +
               "a job and it's still running: " + JSON.stringify(job));
+          ns.tprint("trying to kill it again");
+          await ns.kill(job.filename, hostname, ...job.args);
           start = Date.now();
       }
   }
