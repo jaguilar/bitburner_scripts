@@ -32,6 +32,7 @@ interface IHackingMissionState {
   ns: IGame;
   board: Board;
   overallStats: IOverallStats,
+  currentPath: Path | null,
   buttons: Buttons;
   jsp: jsPlumbInstance;
 }
@@ -80,6 +81,7 @@ async function mainNoTry(ns: IGame, faction: string) {
     ns: ns,
     board: board,
     overallStats: getOverallStats(),
+    currentPath: null,
     buttons: buttons,
     jsp: container.capturedInstance,
   };
@@ -173,18 +175,55 @@ function overflowEffect(h: IHackingMissionState) {
   return 0.95 * h.ns.getHackingLevel() / 130;
 }
 
+class Path {
+  constructor(public route: GridElement[]) {
+  }
+
+  get destination() {
+    return this.route[this.route.length - 1];
+  }
+
+  get next() {
+    return this.route.find(ge => ge.owner != NodeOwner.Me) || null;
+  }
+}
+
 function doGameStep(h: IHackingMissionState) {
   h.board.update(h.jsp);
   h.overallStats = getOverallStats();
 
   handleTransferAndShield(h);
 
+  const hackingPredicates = getHackingPredicates(h);
+  const highestPriorityOnBoard =
+      h.board.data.map(ge => getHackingPriority(ge, hackingPredicates)).reduce((a, n) => n < a ? n : a, Infinity);
+  const currentPathPriority =
+      (h.currentPath && h.currentPath.next) ?
+      getHackingPriority(h.currentPath.destination, hackingPredicates) :
+      Infinity;
+  if (highestPriorityOnBoard < currentPathPriority) {
+    h.currentPath = pickTarget(h, hackingPredicates);
+  }
+  if (!h.currentPath!.next) {
+    throw new Error("no unowned elements in selected path");
+  }
+
   // Decide what we're gonna do with our CPUs. If our attack is less than twice the enemy defense,
   // we'll get more transfer nodes. Otherwise, we'll hack toward the enemy. Note that we don't
   // change targets once we have them.
   for (const core of h.board.data.filter(n => n.type == NodeType.Core && n.owner == NodeOwner.Me)) {
+    // Check if the current target is the best thing we could be doing on the board. If not, disconnect
+    // from it.
+    if (core.connectionTarget && core.connectionTarget != h.currentPath!.next) {
+      core.node.click();
+      h.buttons.drop.click();
+      core.connectionTarget.myTarget--;
+      core.connectionTarget = null;
+    }
+
+    // Connect to the best hacking target on the board.
     if (!core.connectionTarget) {
-      core.connectionTarget = pickTarget(h);
+      core.connectionTarget = h.currentPath!.next!;
       h.jsp.connect({source: core.node, target: core.connectionTarget.node});
       core.connectionTarget = core.connectionTarget;
       core.connectionTarget.myTarget++;
@@ -212,26 +251,19 @@ function doGameStep(h: IHackingMissionState) {
   }
 }
 
-function pickTarget(h: IHackingMissionState) {
-  // If we don't have a target, pick a good next target. We'll try to find neutral transfer
-  // nodes if our attack is less than half the enemy's defense. Otherwise, we'll find the nearest
-  // enemy database.
-  let findStep =
-      (predicate: (ge: GridElement) => boolean) =>
-      h.board.findStepOnClosestRoute(h.overallStats.enemy.def, predicate);
+function getHackingPredicates(h: IHackingMissionState): Array<(ge: GridElement) => boolean> {
+  const predicates: Array<(ge: GridElement) => boolean> = [];
 
+  // First priority is hacking databases if we have the strength.
   if (h.overallStats.enemy.def < .8 * h.overallStats.me.atk) {
-    // We can attack. Route to the nearest enemy database and attack it.
-    return findStep(ge => ge.owner == NodeOwner.Enemy && ge.type == NodeType.Database)!;
+    predicates.push(ge => ge.owner == NodeOwner.Enemy && ge.type == NodeType.Database);
   }
 
-  // We can't attack yet. Gobble up any neutral transfer nodes.
-  const stepToNeutralTransfer = findStep(
-      ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer);
-  if (stepToNeutralTransfer) return stepToNeutralTransfer;
+  // Gobble up neutral transfers.
+  predicates.push(ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer);
 
-  // There are no neutral transfer nodes. We need to contain the enemy.
-  const stepToNodeOnEnemyBorder = findStep(ge => {
+  // Seal in the enemy to prevent expansion.
+  predicates.push(ge => {
     if (ge.owner != NodeOwner.Neutral) return false;
     for (const neighbor of h.board.neighbors(ge)) {
       // We'll count the node as being owned by the enemy if it is actually owned or if it is targetted.
@@ -239,19 +271,34 @@ function pickTarget(h: IHackingMissionState) {
     }
     return false;
   });
-  if (stepToNodeOnEnemyBorder) return stepToNodeOnEnemyBorder;
 
-  // We've captured everything on the border. Target an enemy shield node. If we manage to take
-  // even one of these it will tend to be enough to win the game.
-  const stepToEnemyShield = findStep(ge => ge.owner == NodeOwner.Enemy && ge.type == NodeType.Shield);
-  if (stepToEnemyShield) return stepToEnemyShield;
+  // Destroy the enemy's defense.
+  predicates.push(ge => ge.owner == NodeOwner.Enemy && ge.type == NodeType.Shield);
 
-  // If the enemy has no shields left, hitting a transfer or core is the next best thing.
-  const stepToEnemyAttacker = findStep(ge => ge.owner == NodeOwner.Enemy && (ge.type == NodeType.Transfer || ge.type == NodeType.Core));
-  if (stepToEnemyAttacker) return stepToEnemyAttacker;
+  // Destroy enemy transfers or CPUs.
+  predicates.push(
+    ge => ge.owner == NodeOwner.Enemy && (ge.type == NodeType.Transfer || ge.type == NodeType.Core);
 
-  // Finally, just target any enemy node. I doubt we'll ever reach this code.
-  return findStep(ge => ge.owner == NodeOwner.Enemy)!;
+  // Destroy any enemy node.
+  predicates.push(ge => ge.owner == NodeOwner.Enemy);
+
+  return predicates;
+}
+
+// Return the priority level of this grid element within the list of hacking predicates.
+// If it matches none of the predicates return Infinity. Lower priorities are better.
+function getHackingPriority(ge: GridElement, predicates: Array<(ge: GridElement) => boolean>) {
+  const matchingPredicateIndex = predicates.findIndex(p => p(ge));
+  if (matchingPredicateIndex == -1) return Infinity;
+  return matchingPredicateIndex;
+}
+
+function pickTarget(h: IHackingMissionState, predicates: Array<(ge: GridElement) => boolean>) {
+  for (const p of predicates) {
+    const target = h.board.findStepOnClosestRoute(h.overallStats.enemy.def, p);
+    if (target) return target;
+  }
+  throw new Error("There are no possible targets!");
 }
 
 function handleTransferAndShield(h: IHackingMissionState) {
@@ -473,7 +520,7 @@ class Board {
   }
 
   // Returns the first node on the route to the closest node to our borders matching predicate.
-  findStepOnClosestRoute(enemyDef: number, predicate: (ge: GridElement) => boolean): GridElement | null {
+  findStepOnClosestRoute(enemyDef: number, predicate: (ge: GridElement) => boolean): Path | null {
     var queue: Array<{routeDef: number, route: Array<GridElement>}> = [];
     var minDef = new Map<GridElement, number>();
     for (const node of this.data.filter(n => n.owner == NodeOwner.Me)) {
@@ -499,7 +546,7 @@ class Board {
         if (entry.route.length < 2 || entry.route[0].owner != NodeOwner.Me || entry.route[1].owner == NodeOwner.Me) {
           throw new Error("unexpected route: expected at least two elements. the first should be owned by us and the second shouldn't");
         }
-        return entry.route[1];
+        return new Path(entry.route);
       }
 
       // Otherwise, we'll enqueue any neighbors s.t. the path to the neighbor is cheaper than
