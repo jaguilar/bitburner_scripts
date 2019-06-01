@@ -31,6 +31,7 @@ function monkeyPatchJsPlumb(container: IJSPlumbContainer) {
 interface IHackingMissionState {
   ns: IGame;
   board: Board;
+  overallStats: IOverallStats,
   buttons: Buttons;
   jsp: jsPlumbInstance;
 }
@@ -49,6 +50,7 @@ export async function main(ns: IGame) {
     }
   } catch (e) {
     // While we're in hacking missions, sometimes our exceptions don't get reported?
+    console.error(e);
     throw e;
   } finally {
     // Restore JSPlumb to its original state, so we can play the game manually if we want.
@@ -77,6 +79,7 @@ async function mainNoTry(ns: IGame, faction: string) {
   const hackingMissionState: IHackingMissionState = {
     ns: ns,
     board: board,
+    overallStats: getOverallStats(),
     buttons: buttons,
     jsp: container.capturedInstance,
   };
@@ -172,7 +175,7 @@ function overflowEffect(h: IHackingMissionState) {
 
 function doGameStep(h: IHackingMissionState) {
   h.board.update(h.jsp);
-  const overallStats = getOverallStats();
+  h.overallStats = getOverallStats();
 
   handleTransferAndShield(h);
 
@@ -180,46 +183,25 @@ function doGameStep(h: IHackingMissionState) {
   // we'll get more transfer nodes. Otherwise, we'll hack toward the enemy. Note that we don't
   // change targets once we have them.
   for (const core of h.board.data.filter(n => n.type == NodeType.Core && n.owner == NodeOwner.Me)) {
-    if ((core.connectionTarget && core.connectionTarget.def > 1.2 * overallStats.me.atk) ||
+    if (!core.connectionTarget) {
+      core.connectionTarget = pickTarget(h);
+      h.jsp.connect({source: core.node, target: core.connectionTarget.node});
+      core.connectionTarget = core.connectionTarget;
+      core.connectionTarget.myTarget++;
+    }
+
+    if (core.connectionTarget.def > 1.2 * h.overallStats.me.atk ||
         core.def > 2 * overflowEffect(h)) {
       // Treat the core like a transfer node until we have enough to hack something nearby.
       handleTransferNode(h, core);
       continue;
     }
 
-    if (!core.connectionTarget) {
-      // If we don't have a target, pick a good next target. We'll try to find neutral transfer
-      // nodes if our attack is less than half the enemy's defense. Otherwise, we'll find the nearest
-      // enemy database.
-      let targetRoute: Array<GridElement> | null = null;
-      if (overallStats.me.atk < 2 * overallStats.enemy.def) {
-        targetRoute = h.board.findClosestRoute(
-          overallStats.enemy.def,
-          ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer/* && ge.myTarget + ge.enemyTarget == 0*/);
-      }
-      if (!targetRoute) {
-        // Either there are no more neutral transfer nodes, or else we are ready to start attacking.
-        // Route to the database.
-        targetRoute = h.board.findClosestRoute(
-          overallStats.enemy.def,
-          ge => ge.owner == NodeOwner.Enemy && ge.type == NodeType.Database);
-      }
-
-      if (!targetRoute) {
-        throw new Error("Got null target route. That means there are no databases to hack, so the game should be over.");
-      }
-
-      h.jsp.connect({source: core.node, target: targetRoute[1].node});
-
-      core.connectionTarget = targetRoute[1];
-      targetRoute[1].myTarget++;
-    }
-
     const target = core.connectionTarget;
-    const effectiveDef = target.owner == NodeOwner.Enemy ? overallStats.enemy.def : target.def;
+    const effectiveDef = target.owner == NodeOwner.Enemy ? h.overallStats.enemy.def : target.def;
 
     // We scan longer before attacking the node if it's owned by the enemy.
-    const shouldAttack = target.def < 10 || effectiveDef < 0.75 * overallStats.me.atk;
+    const shouldAttack = target.def < 10 || effectiveDef < 0.75 * h.overallStats.me.atk;
     if (shouldAttack && core.action != NodeAction.Attacking) {
       core.node.click();
       h.buttons.attack.click();
@@ -228,6 +210,48 @@ function doGameStep(h: IHackingMissionState) {
       h.buttons.scan.click();
     }
   }
+}
+
+function pickTarget(h: IHackingMissionState) {
+  // If we don't have a target, pick a good next target. We'll try to find neutral transfer
+  // nodes if our attack is less than half the enemy's defense. Otherwise, we'll find the nearest
+  // enemy database.
+  let findStep =
+      (predicate: (ge: GridElement) => boolean) =>
+      h.board.findStepOnClosestRoute(h.overallStats.enemy.def, predicate);
+
+  if (h.overallStats.enemy.def < .8 * h.overallStats.me.atk) {
+    // We can attack. Route to the nearest enemy database and attack it.
+    return findStep(ge => ge.owner == NodeOwner.Enemy && ge.type == NodeType.Database)!;
+  }
+
+  // We can't attack yet. Gobble up any neutral transfer nodes.
+  const stepToNeutralTransfer = findStep(
+      ge => ge.owner == NodeOwner.Neutral && ge.type == NodeType.Transfer);
+  if (stepToNeutralTransfer) return stepToNeutralTransfer;
+
+  // There are no neutral transfer nodes. We need to contain the enemy.
+  const stepToNodeOnEnemyBorder = findStep(ge => {
+    if (ge.owner != NodeOwner.Neutral) return false;
+    for (const neighbor of h.board.neighbors(ge)) {
+      // We'll count the node as being owned by the enemy if it is actually owned or if it is targetted.
+      if (neighbor.owner == NodeOwner.Enemy || neighbor.enemyTarget > 0) return true;
+    }
+    return false;
+  });
+  if (stepToNodeOnEnemyBorder) return stepToNodeOnEnemyBorder;
+
+  // We've captured everything on the border. Target an enemy shield node. If we manage to take
+  // even one of these it will tend to be enough to win the game.
+  const stepToEnemyShield = findStep(ge => ge.owner == NodeOwner.Enemy && ge.type == NodeType.Shield);
+  if (stepToEnemyShield) return stepToEnemyShield;
+
+  // If the enemy has no shields left, hitting a transfer or core is the next best thing.
+  const stepToEnemyAttacker = findStep(ge => ge.owner == NodeOwner.Enemy && (ge.type == NodeType.Transfer || ge.type == NodeType.Core));
+  if (stepToEnemyAttacker) return stepToEnemyAttacker;
+
+  // Finally, just target any enemy node. I doubt we'll ever reach this code.
+  return findStep(ge => ge.owner == NodeOwner.Enemy)!;
 }
 
 function handleTransferAndShield(h: IHackingMissionState) {
@@ -261,12 +285,16 @@ interface IStats {
   atk: number;
   def: number;
 }
+interface IOverallStats {
+  me: IStats;
+  enemy: IStats;
+}
 function parseStats(statsNode: HTMLParagraphElement): IStats {
   let match = statsRe.exec(statsNode.innerText);
   if (!match) throw new Error("Expected match on node text: " + statsNode.innerText);
   return {atk: parseCommaNumber(match[1]), def: parseCommaNumber(match[2])};
 }
-function getOverallStats() {
+function getOverallStats(): IOverallStats {
   return {
     me: parseStats(document.querySelector<HTMLParagraphElement>("#hacking-mission-player-stats")!),
     enemy: parseStats(document.querySelector<HTMLParagraphElement>("#hacking-mission-enemy-stats")!)
@@ -444,7 +472,8 @@ class Board {
     }
   }
 
-  findClosestRoute(enemyDef: number, predicate: (ge: GridElement) => boolean): Array<GridElement> | null {
+  // Returns the first node on the route to the closest node to our borders matching predicate.
+  findStepOnClosestRoute(enemyDef: number, predicate: (ge: GridElement) => boolean): GridElement | null {
     var queue: Array<{routeDef: number, route: Array<GridElement>}> = [];
     var minDef = new Map<GridElement, number>();
     for (const node of this.data.filter(n => n.owner == NodeOwner.Me)) {
@@ -470,13 +499,13 @@ class Board {
         if (entry.route.length < 2 || entry.route[0].owner != NodeOwner.Me || entry.route[1].owner == NodeOwner.Me) {
           throw new Error("unexpected route: expected at least two elements. the first should be owned by us and the second shouldn't");
         }
-        return entry.route;
+        return entry.route[1];
       }
 
       // Otherwise, we'll enqueue any neighbors s.t. the path to the neighbor is cheaper than
       // any known path.
       for (const neighbor of this.neighbors(lastGridElement)) {
-        const minCost = minDef.get(neighbor) || Infinity;
+        const minCost = minDef.has(neighbor) ? minDef.get(neighbor)! : Infinity;
         let neighborCost = neighbor.owner == NodeOwner.Enemy ? enemyDef : neighbor.def;
         if (neighbor.type == NodeType.Transfer) {
           // We prefer to go through transfer nodes, since that can allow us to build up some additional
