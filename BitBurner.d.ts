@@ -129,4 +129,15 @@ declare interface IGame {
   getTimeSinceLastAug(): number;
   prompt(text: string): Promise<boolean>;
   getBitNodeMultipliers(): IBitNodeMultipliers;
+
+  getStockSymbols(): string[];
+  getStockPosition(sym: string): number[];
+  getStockPrice(sym: string): number;
+  getStockBidPrice(sym: string): number;
+  getStockAskPrice(sym: string): number;
+  getStockForecast(sym: string): number;
+  getStockSaleGain(sym: string, shares: number, positionType: "L" | "S"): number;
+  getStockPurchaseCost(sym: string, shares: number, positionType: "L" | "S"): number;
+  sellStock(sym: string, shares: number): void;
+  buyStock(sym: string, shares: number): void;
 }
