@@ -60,8 +60,10 @@ declare interface IGame {
   grow(hostname: string): Promise<number>;
   weaken(hostname: string): Promise<number>;
   sleep(milliseconds: number): Promise<void>;
+  ps(hostname: string): Array<{filename: string, args: string[], threads: number}>;
   print(data: any): void;
   tprint(data: any): void;
+  sprintf(format: string, ...args: any): string;
   clearLog(): void;
   disableLog(func: string): void;
   enableLog(func: string): void;
