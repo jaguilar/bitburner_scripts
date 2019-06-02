@@ -56,7 +56,7 @@ class Server {
   }
 }
 
-interface Job {
+export interface Job {
   filename: string;
   args: string[];
   threads: number;
