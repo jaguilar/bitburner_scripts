@@ -277,7 +277,7 @@ function getHackingPredicates(h: IHackingMissionState): Array<(ge: GridElement) 
 
   // Destroy enemy transfers or CPUs.
   predicates.push(
-    ge => ge.owner == NodeOwner.Enemy && (ge.type == NodeType.Transfer || ge.type == NodeType.Core);
+    ge => ge.owner == NodeOwner.Enemy && (ge.type == NodeType.Transfer || ge.type == NodeType.Core));
 
   // Destroy any enemy node.
   predicates.push(ge => ge.owner == NodeOwner.Enemy);
