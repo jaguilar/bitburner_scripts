@@ -86,16 +86,17 @@ export async function main(ns) {
     let tradeHistory = [];
     while (true) {
         trade(ns, tradeHistory);
-        const historyLength = 20;
-        while (tradeHistory.length > historyLength) {
+        const maxHistoryLength = 20;
+        while (tradeHistory.length > maxHistoryLength) {
             tradeHistory.shift();
         }
-        if (tradeHistory.length == historyLength) {
-            const sum = tradeHistory.reduce((a, b) => a + b);
-            if (sum < 0) {
-                ns.tprint(`our absolute profit over the last ${tradeHistory.length} trades is ${sum}, which is less than 1`);
-                return;
-            }
+        const sum = tradeHistory.reduce((a, b) => a + b, 0);
+        if (tradeHistory.length > 0) {
+            ns.tprint(`average profit per trade: $${(sum / tradeHistory.length).toPrecision(2)}`);
+        }
+        if (tradeHistory.length == maxHistoryLength && sum < 0) {
+            ns.tprint(`our absolute profit over the last ${tradeHistory.length} trades is ${sum}, which is less than 0`);
+            return;
         }
         await ns.sleep(60000);
     }
