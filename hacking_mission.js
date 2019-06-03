@@ -178,8 +178,7 @@ function doGameStep(h) {
             core.connectionTarget = core.connectionTarget;
             core.connectionTarget.myTarget++;
         }
-        if (h.ns.getHackingLevel() > 1000 && (core.connectionTarget.def > 1.2 * h.overallStats.me.atk) ||
-            core.def > 2 * overflowEffect(h)) {
+        if (core.def > 2 * overflowEffect(h)) {
             // Treat the core like a transfer node until we have enough to hack something nearby.
             handleTransferNode(h, core);
             continue;
