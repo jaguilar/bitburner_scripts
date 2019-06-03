@@ -5,7 +5,10 @@ export async function main(ns) {
   if (ns.args.length > 0) {
     await sync1(ns, ns.args[0]);
   } else {
-    await sync(ns);
+    while (true) {
+      await sync(ns);
+      await ns.sleep(4000);
+    }
   }
   ns.tprint("sync complete");
 }
