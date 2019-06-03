@@ -140,4 +140,14 @@ declare interface IGame {
   getStockPurchaseCost(sym: string, shares: number, positionType: "L" | "S"): number;
   sellStock(sym: string, shares: number): void;
   buyStock(sym: string, shares: number): void;
+
+  codingcontract: ICodingContract;
+}
+
+interface ICodingContract {
+  attempt(answer: any, filename: string, hostname: string): boolean;
+  getContractType(filename: string, hostname: string): string;
+  getDescription(filename: string, hostname: string): string;
+  getData(filename: string, hostname: string): any;
+  getNumTriesRemaining(filename: string, hostname: string): number;
 }
