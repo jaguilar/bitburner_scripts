@@ -87,7 +87,7 @@ function goodBoard(board) {
         }
     }
     let numOwnCpus = board.data.reduce((a, n) => a + ((n.type == NodeType.Core && n.owner == NodeOwner.Me) ? 1 : 0), 0);
-    return count >= numOwnCpus;
+    return count >= numOwnCpus + 1;
 }
 function isGameRunning() {
     return document.querySelector("#hacking-mission-player-stats") != null;
@@ -178,7 +178,7 @@ function doGameStep(h) {
             core.connectionTarget = core.connectionTarget;
             core.connectionTarget.myTarget++;
         }
-        if (core.connectionTarget.def > 1.2 * h.overallStats.me.atk ||
+        if (h.ns.getHackingLevel() > 1000 && (core.connectionTarget.def > 1.2 * h.overallStats.me.atk) ||
             core.def > 2 * overflowEffect(h)) {
             // Treat the core like a transfer node until we have enough to hack something nearby.
             handleTransferNode(h, core);
