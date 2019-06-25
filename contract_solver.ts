@@ -174,6 +174,7 @@ async function solveAllPendingContracts(ns: IGame) {
 }
 
 export async function main(ns: IGame) {
+  ns.disableLog("rm");
   while (true) {
     await solveAllPendingContracts(ns);
     await ns.sleep(60000);

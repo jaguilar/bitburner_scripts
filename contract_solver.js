@@ -163,6 +163,7 @@ async function solveAllPendingContracts(ns) {
     }
 }
 export async function main(ns) {
+    ns.disableLog("rm");
     while (true) {
         await solveAllPendingContracts(ns);
         await ns.sleep(60000);
